@@ -43,8 +43,17 @@ class MoveToGoal(Node):
         self._goal_y = self.get_parameter('goal_y').get_parameter_value().double_value
         self.declare_parameter('goal_t', 0.0)
         self._goal_t = self.get_parameter('goal_t').get_parameter_value().double_value
+        
+        #Declaring the additional parameters (controller_gain and max_velocity)
+        self.declare_parameter('max_velocity', 0.0)
+        self.declare_parameter('controller_gain', 0.0)
+
+        #Use getters to obtain parameter values
+        self._max_velocity = self.get_parameter('max_velocity').get_parameter_value().double_value
+        self._controller_gain = self.get_parameter('controller_gain').get_parameter_value().double_value
+
         self.add_on_set_parameters_callback(self.parameter_callback)
-        self.get_logger().info(f"initial goal {self._goal_x} {self._goal_y} {self._goal_t}")
+        self.get_logger().info(f"initial goal {self._goal_x} {self._goal_y} {self._goal_t} {self._max_velocity} {self._controller_gain}")
 
         self._subscriber = self.create_subscription(Odometry, "/odom", self._listener_callback, 1)
         self._publisher = self.create_publisher(Twist, "/cmd_vel", 1)
@@ -65,11 +74,11 @@ class MoveToGoal(Node):
 
         twist = Twist()
         if dist > max_pos_err:
-            x = max(min(x_diff * vel_gain, max_vel), -max_vel)
-            y = max(min(y_diff * vel_gain, max_vel), -max_vel)
+            x = max(min(x_diff * self._controller_gain, self._max_velocity), -self._max_velocity)
+            y = max(min(y_diff * self._controller_gain, self._max_velocity), -self._max_velocity)
             twist.linear.x = x * math.cos(cur_t) + y * math.sin(cur_t)
             twist.linear.y = -x * math.sin(cur_t) + y * math.cos(cur_t)
-            self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t}) goal ({self._goal_x},{self._goal_y},{self._goal_t})")
+            self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t}) goal ({self._goal_x},{self._goal_y},{self._goal_t} max velocity {self._max_velocity} controller gain {self._controller_gain})")
         self._publisher.publish(twist)
 
     def parameter_callback(self, params):
@@ -82,10 +91,14 @@ class MoveToGoal(Node):
                 self._goal_y = param.value
             elif param.name == 'goal_t' and param.type_ == Parameter.Type.DOUBLE:
                 self._goal_t = param.value
+            elif param.name == 'max_velocity' and param.type_ == Parameter.Type.DOUBLE:
+                self._goal_t = param.value
+            elif param.name == 'controller_gain' and param.type_ == Parameter.Type.DOUBLE:
+                self._goal_t = param.value
             else:
                 self.get_logger().warn(f'{self.get_name()} Invalid parameter {param.name}')
                 return SetParametersResult(successful=False)
-            self.get_logger().warn(f"Changing goal {self._goal_x} {self._goal_y} {self._goal_t}")
+            self.get_logger().warn(f"Changing goal {self._goal_x} {self._goal_y} {self._goal_t} {self._max_velocity} {self._controller_gain}")
         return SetParametersResult(successful=True)
 
 
