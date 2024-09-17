@@ -92,9 +92,9 @@ class MoveToGoal(Node):
             elif param.name == 'goal_t' and param.type_ == Parameter.Type.DOUBLE:
                 self._goal_t = param.value
             elif param.name == 'max_velocity' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal_t = param.value
+                self._max_velocity = param.value
             elif param.name == 'controller_gain' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal_t = param.value
+                self._controller_gain = param.value
             else:
                 self.get_logger().warn(f'{self.get_name()} Invalid parameter {param.name}')
                 return SetParametersResult(successful=False)
