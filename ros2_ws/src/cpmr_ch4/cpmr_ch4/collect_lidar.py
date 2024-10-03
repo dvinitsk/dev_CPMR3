@@ -43,10 +43,9 @@ class CollectLidar(Node):
 
         self._map = np.zeros((CollectLidar._HEIGHT, CollectLidar._WIDTH), dtype=np.uint8)
 
-
+        self.cur_t = None
         self.create_subscription(Odometry, "/odom", self._odom_callback, 1)
         self.create_subscription(LaserScan, "/scan", self._scan_callback, 1)
-
 
 
     def _scan_callback(self, msg):
@@ -55,6 +54,30 @@ class CollectLidar(Node):
         angle_increment = msg.angle_increment
         ranges = msg.ranges
         self.get_logger().info(f"lidar ({angle_min},{angle_max},{angle_increment},{len(ranges)})")
+        #understand what ranges outputs, and then fill up self._map accordingly
+       
+        for i in range(len(ranges)):
+            #polar to cartesian calculations
+         
+            angle = angle_min + i * angle_increment
+            r = ranges[i]
+           
+            #x and y distances to obstacle from robots perspective
+            robot_x = r * math.cos(angle)
+            robot_y = r * math.sin(angle)
+           
+            #changing robots coordinate frame to world's coordinate frame (expressed as some float values)
+            #where world_x and world_y represent the obstacle's position in meters
+            if self.cur_t is None:
+                continue
+            world_x = robot_x * math.cos(self.cur_t) - robot_y * math.sin(self.cur_t)
+            world_y = robot_x * math.sin(self.cur_t) + robot_y * math.cos(self.cur_t)
+           
+            #representing map's coordinates relative to the robot's position
+            pixel_x = int(((world_x + self.cur_x) / self._M_PER_PIXEL) + self._WIDTH / 2)
+            pixel_y = int(((world_y + self.cur_y) / self._M_PER_PIXEL) + self._WIDTH / 2)
+
+            self._map[pixel_x, pixel_y] = 255
 
         cv2.imshow('map',self._map)
         cv2.waitKey(10)
@@ -62,13 +85,15 @@ class CollectLidar(Node):
     def _odom_callback(self, msg):
         pose = msg.pose.pose
 
-        cur_x = pose.position.x
-        cur_y = pose.position.y
+        self.cur_x = pose.position.x
+        self.cur_y = pose.position.y
+
         o = pose.orientation
-        roll, pitchc, yaw = euler_from_quaternion(o)
-        cur_t = yaw
-        
-        self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t})")
+
+        roll, pitchc, self.cur_t = euler_from_quaternion(o)
+
+        self.get_logger().info(f"at ({self.cur_x},{self.cur_y},{self.cur_t})")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -81,4 +106,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
