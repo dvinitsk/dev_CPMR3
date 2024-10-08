@@ -1,0 +1,6 @@
+while goal not met:
+  while(no obstacle in front)
+    continue walking toward the goal
+  while(obstacle not cleared):
+    go tangent to the obstacle's surface
+ 
