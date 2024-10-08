@@ -74,8 +74,14 @@ class MoveToGoal(Node):
 
         twist = Twist()
         if dist > max_pos_err:
-            x = max(min(x_diff * self._controller_gain, self._max_velocity), -self._max_velocity)
-            y = max(min(y_diff * self._controller_gain, self._max_velocity), -self._max_velocity)
+            l = self._controller_gain * math.sqrt(x_diff**2 + y_diff**2)
+            if l > self._max_velocity:
+                x = x_diff * self._controller_gain * self._max_velocity / l
+                y = y_diff * self._controller_gain * self._max_velocity / l
+            else:
+                x = x_diff * self._controller_gain
+                y = y_diff * self._controller_gain
+            
             twist.linear.x = x * math.cos(cur_t) + y * math.sin(cur_t)
             twist.linear.y = -x * math.sin(cur_t) + y * math.cos(cur_t)
             self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t}) goal ({self._goal_x},{self._goal_y},{self._goal_t} max velocity {self._max_velocity} controller gain {self._controller_gain})")
