@@ -28,7 +28,7 @@ class AutoDriveByLine(Node):
         self.declare_parameter('cmd', "/cmd_vel")
         self.declare_parameter('odom', "/odom")
         self.declare_parameter('rate', 10)
-        self.declare_parameter('model', "road-follower")
+        self.declare_parameter('model', "road-follower.keras")
         self.declare_parameter('x_vel', 0.2)
         self.declare_parameter('theta_vel', 0.2)
         self.declare_parameter('image_size', 28)
@@ -99,7 +99,6 @@ class AutoDriveByLine(Node):
 
     def turn_right(self):
         self._command(self._x_vel, -self._theta_vel)
-
     def stop(self):
         self._command(0.0, 0.0)
 
