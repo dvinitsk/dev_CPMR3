@@ -31,7 +31,7 @@ def parse_odometry(file_path, output_path):
 
 
 # Usage example
-input_file = 'ground_truth_odometry.txt'  # Replace with your file path
+input_file = 'model_improved.txt'  # Replace with your file path
 output_file = 'extracted_positions.txt'  # Output file for (x, y, z) data
 
 parse_odometry(input_file, output_file)
