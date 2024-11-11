@@ -36,7 +36,7 @@ def parse_pose_coordinates(input_file, output_file):
 
 
 # Usage example
-input_file = 'ground_truth_odometry.txt'  # Replace with your input file path
+input_file = 'model_improved.txt'  # Replace with your input file path
 output_file = 'filtered_positions.txt'    # Replace with your desired output file path
 
 # Run the function to extract the coordinates
