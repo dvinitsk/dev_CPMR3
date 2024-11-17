@@ -1,15 +1,15 @@
 import os
+import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration 
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    urdf = os.path.join(get_package_share_directory('cpmr_apb'), 'blockrobot.urdf')
-    with open(urdf, 'r') as infp:
-        robot_desc = infp.read()
+    urdf = os.path.join(get_package_share_directory('cpmr_ch4'), 'scout-laser.urdf.xacro')
+    robot_desc = xacro.process_file(urdf, mappings={'name' : 'laser_robot'}).toxml()
 
     return LaunchDescription([
         IncludeLaunchDescription(
@@ -30,5 +30,5 @@ def generate_launch_description():
              executable='spawn_entity.py',
              name='urdf_spawner',
              output='screen',
-             arguments=["-topic", "/robot_description",  "-entity",  "block_robot"]),
+             arguments=["-topic", "/robot_description",  "-entity",  "laser-robot"]),
     ])
