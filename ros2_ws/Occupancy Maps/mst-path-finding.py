@@ -56,49 +56,43 @@ def kruskal_mst(points, binary_map):
     
     return mst_edges
 
-def dijkstra_shortest_path(points, mst_edges, start_idx, goal_idx):
-    # Build graph from MST edges
+def find_path_through_mst(points, mst_edges, start_idx, goal_idx):
+    # Build adjacency list representation of MST
     graph = {i: [] for i in range(len(points))}
     for u, v, weight in mst_edges:
         graph[u].append((v, weight))
         graph[v].append((u, weight))
     
-    # Dijkstra's algorithm
-    pq = [(0, start_idx)]
-    distances = {i: float('inf') for i in range(len(points))}
-    distances[start_idx] = 0
-    predecessors = {i: None for i in range(len(points))}
-
-    while pq:
-        current_distance, current_node = heappop(pq)
-        
-        if current_node == goal_idx:
+    # BFS to find path between start and goal
+    visited = set()
+    parent = {start_idx: None}
+    queue = [start_idx]
+    visited.add(start_idx)
+    
+    while queue:
+        current = queue.pop(0)
+        if current == goal_idx:
             break
-
-        # If we've found a longer path, skip
-        if current_distance > distances[current_node]:
-            continue
-
-        for neighbor, neighbor_distance in graph[current_node]:
-            distance_through_current = current_distance + neighbor_distance
-            if distance_through_current < distances[neighbor]:
-                distances[neighbor] = distance_through_current
-                predecessors[neighbor] = current_node
-                heappush(pq, (distance_through_current, neighbor))
-
+        
+        for neighbor, _ in graph[current]:
+            if neighbor not in visited:
+                visited.add(neighbor)
+                parent[neighbor] = current
+                queue.append(neighbor)
+    
     # Reconstruct path
     path = []
     node = goal_idx
     while node is not None:
         path.append(points[node])
-        node = predecessors[node]
+        node = parent.get(node)
     path.reverse()
-
+    
     return path
 
 def main():
     map_path = 'dilated_occupancy_map.png'
-    num_samples = 1000
+    num_samples = 500
 
     start_point = (449, 830)
     goal_point = (350, 268)
@@ -115,31 +109,25 @@ def main():
     # Generate Minimum Spanning Tree
     mst_edges = kruskal_mst(samples, binary_map)
 
-    # Find shortest path
-    shortest_path = dijkstra_shortest_path(samples, mst_edges, len(samples) - 2, len(samples) - 1)
+    # Find path through MST
+    shortest_path = find_path_through_mst(samples, mst_edges, len(samples) - 2, len(samples) - 1)
 
     # Visualize result
     rrt_world = cv2.cvtColor(binary_map, cv2.COLOR_GRAY2BGR)
     
-    # Draw MST edges in orange
+    # Draw MST edges
     for u, v, _ in mst_edges:
         pt1 = samples[u]
         pt2 = samples[v]
-        cv2.line(rrt_world, pt1, pt2, (0, 165, 255), 1)  # Orange edges (BGR color space)
+        cv2.line(rrt_world, pt1, pt2, (200, 200, 200), 1)  # Light gray edges
 
-    # Draw shortest path in magenta
+    # Draw shortest path
     if shortest_path:
         for i in range(len(shortest_path) - 1):
-            cv2.line(rrt_world, shortest_path[i], shortest_path[i + 1], (255, 0, 255), 2)  # Magenta path
-
-    # Mark start and goal points
-    # Start point: Blue circle
-    cv2.circle(rrt_world, start_point, 8, (255, 0, 0), -1)  # Filled blue circle
-    # Goal point: Red circle
-    cv2.circle(rrt_world, goal_point, 8, (0, 0, 255), -1)  # Filled red circle
+            cv2.line(rrt_world, shortest_path[i], shortest_path[i + 1], (0, 255, 0), 2)  # Green path
 
     cv2.imshow("Path through Minimum Spanning Tree", rrt_world)
-    cv2.imwrite("mst_path_modified.png", rrt_world)
+    cv2.imwrite("mst_path.png", rrt_world)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
