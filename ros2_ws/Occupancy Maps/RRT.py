@@ -132,6 +132,17 @@ def main():
         for i in range(len(shortest_path) - 1):
             cv2.line(rrt_world, shortest_path[i], shortest_path[i + 1], (255, 0, 255), 2)  # Magenta path
 
+    # Print waypoints and display them as green circles
+    print("Waypoints (from start to goal):")
+    for waypoint in shortest_path:
+        cv2.circle(rrt_world, waypoint, 5, (0, 255, 0), -1)  # Green circles
+        print(waypoint)
+
+    # Save waypoints to a file
+    with open("waypoints.txt", "w") as file:
+        for waypoint in shortest_path:
+            file.write(f"{waypoint[0]},{waypoint[1]}\n")
+
     # Mark start and goal points
     # Start point: Blue circle
     cv2.circle(rrt_world, start_point, 8, (255, 0, 0), -1)  # Filled blue circle
