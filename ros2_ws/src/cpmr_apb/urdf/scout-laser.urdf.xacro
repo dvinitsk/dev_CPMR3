@@ -303,9 +303,11 @@
       <robotBaseFrame>base_footprint</robotBaseFrame>
       <wheel_separation>${robot_base_width+robot_wheel_width}</wheel_separation>
       <wheel_diameter>${2*robot_wheel_radius}</wheel_diameter>
+      <command_topic>cmd_vel</command_topic>
       <publish_odom>true</publish_odom>
       <publish_odom_tf>true</publish_odom_tf>
       <publish_wheel_tf>true</publish_wheel_tf>
+      <odometry_topic>odom</odometry_topic>
       <odometry_frame>odom</odometry_frame>
       <robot_base_frame>base_footprint</robot_base_frame>
       <command_topic>cmd_vel</command_topic>
