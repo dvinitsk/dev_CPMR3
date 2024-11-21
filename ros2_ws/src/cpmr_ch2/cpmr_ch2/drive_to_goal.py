@@ -1,16 +1,14 @@
 import math
+import csv
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
-from rcl_interfaces.msg import SetParametersResult
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist, Pose, Point, Quaternion
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 
 def euler_from_quaternion(quaternion):
     """
-    Converts quaternion (w in last place) to euler roll, pitch, yaw
+    Converts quaternion (w in last place) to euler roll, pitch, yaw.
     quaternion = [x, y, z, w]
     """
     x = quaternion.x
@@ -31,64 +29,102 @@ def euler_from_quaternion(quaternion):
 
     return roll, pitch, yaw
 
-
 class MoveToGoal(Node):
-    def __init__(self):
-        super().__init__('move_robot_to_goal')
+    def __init__(self, waypoints_file='/home/dvinitsk/dev_CPMR3/ros2_ws/waypoints_gazebo.csv'):
+        super().__init__('drive_to_goal')
         self.get_logger().info(f'{self.get_name()} created')
 
-        self.declare_parameter('goal_x', 0.0)
-        self._goal_x = self.get_parameter('goal_x').get_parameter_value().double_value
-        self.declare_parameter('goal_y', 0.0)
-        self._goal_y = self.get_parameter('goal_y').get_parameter_value().double_value
-        self.declare_parameter('goal_t', 0.0)
-        self._goal_t = self.get_parameter('goal_t').get_parameter_value().double_value
-        self.add_on_set_parameters_callback(self.parameter_callback)
-        self.get_logger().info(f"initial goal {self._goal_x} {self._goal_y} {self._goal_t}")
+        # Load waypoints from file
+        self.waypoints = self.load_waypoints(waypoints_file)
+        if not self.waypoints:
+            self.get_logger().error("No waypoints loaded. Shutting down node.")
+            rclpy.shutdown()
+            return
+        
+        self.current_waypoint_index = 0
+        self._goal_x, self._goal_y = self.waypoints[0]
+        
+        self.get_logger().info(f"Loaded {len(self.waypoints)} waypoints")
+        self.get_logger().info(f"Initial goal: ({self._goal_x}, {self._goal_y})")
 
         self._subscriber = self.create_subscription(Odometry, "/odom", self._listener_callback, 1)
         self._publisher = self.create_publisher(Twist, "/cmd_vel", 1)
+        
+        self.moving_to_waypoint = True
 
+    def load_waypoints(self, waypoints_file):
+        """Load waypoints from a CSV file."""
+        waypoints = []
+        try:
+            with open(waypoints_file, 'r') as f:
+                csv_reader = csv.reader(f)
+                next(csv_reader)  # Skip the header
+                for row in csv_reader:
+                    if len(row) >= 2:
+                        waypoints.append((float(row[0]), float(row[1])))
+            self.get_logger().info(f"Loaded waypoints from {waypoints_file}")
+        except Exception as e:
+            self.get_logger().error(f"Error reading waypoints: {e}")
+        return waypoints
+
+    def move_to_next_waypoint(self):
+        """Update goal to next waypoint if available"""
+        self.current_waypoint_index += 1
+        if self.current_waypoint_index < len(self.waypoints):
+            self._goal_x, self._goal_y = self.waypoints[self.current_waypoint_index]
+            self.moving_to_waypoint = True
+            self.get_logger().info(f"Moving to waypoint {self.current_waypoint_index}: ({self._goal_x:.2f}, {self._goal_y:.2f})")
+            return True
+        else:
+            self.get_logger().info("Reached final waypoint!")
+            return False
 
     def _listener_callback(self, msg, vel_gain=5.0, max_vel=0.2, max_pos_err=0.05):
-        pose = msg.pose.pose
+        if not self.moving_to_waypoint:
+            return
 
+        # Get the robot's current position and orientation
+        pose = msg.pose.pose
         cur_x = pose.position.x
         cur_y = pose.position.y
         o = pose.orientation
-        roll, pitchc, yaw = euler_from_quaternion(o)
+        roll, pitch, yaw = euler_from_quaternion(o)
         cur_t = yaw
-        
+
+        # Calculate the difference and distance to the goal
         x_diff = self._goal_x - cur_x
         y_diff = self._goal_y - cur_y
-        dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
+        dist = math.sqrt(x_diff**2 + y_diff**2)
+
+        # Debugging information
+        self.get_logger().info(
+            f"Current pose: ({cur_x:.2f}, {cur_y:.2f}, {cur_t:.2f}) | "
+            f"Goal: ({self._goal_x:.2f}, {self._goal_y:.2f}) | "
+            f"Distance to goal: {dist:.2f}"
+        )
 
         twist = Twist()
+
         if dist > max_pos_err:
-            x = max(min(x_diff * vel_gain, max_vel), -max_vel)
-            y = max(min(y_diff * vel_gain, max_vel), -max_vel)
-            twist.linear.x = x * math.cos(cur_t) + y * math.sin(cur_t)
-            twist.linear.y = -x * math.sin(cur_t) + y * math.cos(cur_t)
-            self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t}) goal ({self._goal_x},{self._goal_y},{self._goal_t})")
+            # Calculate linear velocity based on distance and orientation
+            heading = math.atan2(y_diff, x_diff)
+            angle_diff = heading - cur_t
+            twist.angular.z = max(min(angle_diff * vel_gain, max_vel), -max_vel)
+            twist.linear.x = max(min(dist * vel_gain, max_vel), -max_vel)
+            self.get_logger().info(
+                f"Driving: Distance {dist:.2f}, Heading difference {angle_diff:.2f}, "
+                f"Linear velocity {twist.linear.x:.2f}, Angular velocity {twist.angular.z:.2f}"
+            )
+        else:
+            # Goal reached, move to the next waypoint
+            self.moving_to_waypoint = False
+            if not self.move_to_next_waypoint():
+                self.get_logger().info("Navigation complete!")
+                twist.linear.x = 0.0
+                twist.angular.z = 0.0
+
+        # Publish the velocity command
         self._publisher.publish(twist)
-
-    def parameter_callback(self, params):
-        self.get_logger().info(f'move_robot_to_goal parameter callback {params}')
-        for param in params:
-            self.get_logger().info(f'move_robot_to_goal processing {param.name}')
-            if param.name == 'goal_x' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal_x = param.value
-            elif param.name == 'goal_y' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal_y = param.value
-            elif param.name == 'goal_t' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal_t = param.value
-            else:
-                self.get_logger().warn(f'{self.get_name()} Invalid parameter {param.name}')
-                return SetParametersResult(successful=False)
-            self.get_logger().warn(f"Changing goal {self._goal_x} {self._goal_y} {self._goal_t}")
-        return SetParametersResult(successful=True)
-
-
 
 def main(args=None):
     rclpy.init(args=args)
