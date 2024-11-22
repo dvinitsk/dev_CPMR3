@@ -7,7 +7,7 @@ binary_map = cv2.imread(img_path)
 # Define the robot's radius in pixels (convert from meters if needed)
 robot_diagonal_distance = ((0.4 ** 2) + (0.36 ** 2)) ** 0.5
 robot_radius_meters = robot_diagonal_distance / 2
-robot_radius_pixels = 10 * robot_radius_meters  # 10px/m *  
+robot_radius_pixels = 20 * robot_radius_meters  # 10px/m *  
 
 kernel_size = int(robot_radius_pixels)
 kernel_size = max(1, kernel_size)

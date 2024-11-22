@@ -101,7 +101,7 @@ def main():
     num_samples = 1000
 
     start_point = (449, 830)
-    goal_point = (350, 268)
+    goal_point = (427, 471) #Updated this value to 
 
     # Load binary occupancy map
     binary_map = cv2.imread(map_path, cv2.IMREAD_GRAYSCALE)
@@ -139,7 +139,7 @@ def main():
         print(waypoint)
 
     # Save waypoints to a file
-    with open("waypoints.txt", "w") as file:
+    with open("waypoints.csv", "w") as file:
         for waypoint in shortest_path:
             file.write(f"{waypoint[0]},{waypoint[1]}\n")
 

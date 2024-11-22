@@ -1,7 +1,7 @@
 import csv
 import numpy as np
 
-def process_waypoints(input_file, reference_x=449, reference_y=830, scale_factor=0.0317):
+def process_waypoints(input_file, reference_x=449, reference_y=830, scale_factor=0.1318):
     """
     Process waypoints from pixel coordinates to robot pose coordinates
     
