@@ -113,7 +113,20 @@ class FSM(Node):
         self._cur_theta = 0.0
         self._cur_state = FSM_STATES.AT_START
         self._start_time = self.get_clock().now().nanoseconds * 1e-9
-        self._points = [[0, 0, 0], [0, 5, 0], [5, 5, math.pi/2], [5, 0, -math.pi/2]]
+        #self._points = [[0, 0, 0], [0, 2, 0], [2, 2, math.pi/2], [2, 0, -math.pi/2]]
+        self._points = [
+            #The yaw coordinate (heading) is set to transition from the previous point to the next
+            # Square
+            [0, 0, 0],           # Start point, facing +x
+            [2, 0, math.pi/2],   # Right side, turn to face +y
+            [2, 2, math.pi],     # Top side, turn to face -x
+            [0, 2, -math.pi/2],  # Left side, turn to face -y
+            [0, 0, math.pi],     # Return to start, face -x for triangle
+            # Triangle
+            [-2, 0, -math.pi/4], # Left point, angle to go to bottom
+            [-2, -2, math.pi/4], # Bottom point, angle to return home
+            [0, 0, 0]           # Return to start, face +x
+        ]
         self._point = 0
         self._run = False
 
