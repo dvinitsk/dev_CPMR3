@@ -10,6 +10,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 
+
 def generate_launch_description():
     nchairs = 5
     for arg in sys.argv: # there must be a better way...
@@ -20,18 +21,8 @@ def generate_launch_description():
            print(f"Unknown argument in {arg}")
            sys.exit(0)
     print(f"Controlling {nchairs}")
+
     nodelist = []
-    
-    # Add teleop keyboard for leader control
-    nodelist.append(
-        Node(
-            package='cpmr_ch11',
-            executable='keyboard_teleop',
-            output='screen',
-            )
-    )
-    '''
-    # Add leader node
     nodelist.append(
         Node(
             namespace = "chair_0",
@@ -41,12 +32,12 @@ def generate_launch_description():
             output='screen',
             parameters=[{'chair_name' : "chair_0"}])
         )
-    print(f"leaderchair done")'''
-    
-    # Add follower nodes in chain
+    print(f"leaderchair done")
+
+
     for chair in range(1, nchairs):
         name = f'chair_{chair}'
-        target = f'chair_{chair-1}'  # Modified to follow previous chair
+        target = f'chair_{chair-1}'
         print(f"Processing {chair}, following {target}")
         nodelist.append(
             Node(
@@ -55,6 +46,7 @@ def generate_launch_description():
                 executable='follow_chair',
                 name='follow_chair',
                 output='screen',
-                parameters=[{'chair_name' : name, 'target_name' : target}])
+                parameters=[{'chair_name' : name, 'target_name' : target}]) # use chair_{chair-1}
         )
+
     return LaunchDescription(nodelist)
