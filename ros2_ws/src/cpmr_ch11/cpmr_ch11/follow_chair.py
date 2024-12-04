@@ -101,8 +101,8 @@ class FollowChair(Node):
         speed = abs(diff) * gain
         speed = min(max_speed, max(min_speed, speed))
         return math.copysign(speed, diff)
-        
-    def _drive_to_target(self, heading0_tol = 0.15, range_tol = 1.0):
+    
+    def _drive_to_target(self, heading0_tol = 0.15, range_tol = 1.0, safe_distance = 2.0):
         """Return True iff we are at the goal, otherwise drive there. Goal in position space only"""
 
         twist = Twist()
@@ -110,29 +110,39 @@ class FollowChair(Node):
         x_diff = self._target_x - self._cur_x
         y_diff = self._target_y - self._cur_y
         dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
-        if dist > range_tol:
-            self.get_logger().info(f'{self.get_name()} driving to target with target distance {dist}')
-            # turn to the goal
-            heading = math.atan2(y_diff, x_diff)
-            self.get_logger().info(f'Heading to target is {heading} cur_angle is {self._cur_theta}')
-            diff = FollowChair._short_angle(heading - self._cur_theta)
-            if (abs(diff) > heading0_tol):
-                twist.angular.z = FollowChair._compute_speed(diff, 0.5, 0.2, 0.2)
-                self.get_logger().info(f'{self.get_name()} turning towards goal heading {heading} current {self._cur_theta} diff {diff} {twist.angular.z}')
-                self._publisher.publish(twist)
-                self._cur_twist = twist
-                return False
 
-            twist.linear.x = FollowChair._compute_speed(dist, 0.5, 0.05, 0.5)
+        # Calculate desired speed based on distance to target
+        if dist < range_tol:
+            # Too close - stop
+            self.get_logger().info(f'at target')
             self._publisher.publish(twist)
-            self.get_logger().info(f'{self.get_name()} a distance {dist}  from target velocity {twist.linear.x}')
+            return True
+        elif dist < safe_distance:
+            # In safety zone - maintain distance
+            desired_speed = 0.1 * (dist - range_tol)
+        else:
+            # Normal following behavior
+            desired_speed = FollowChair._compute_speed(dist - safe_distance, 0.5, 0.05, 0.5)
+
+        # Handle orientation
+        heading = math.atan2(y_diff, x_diff)
+        self.get_logger().info(f'Heading to target is {heading} cur_angle is {self._cur_theta}')
+        diff = FollowChair._short_angle(heading - self._cur_theta)
+
+        if (abs(diff) > heading0_tol):
+            # Need to turn to face target
+            twist.angular.z = FollowChair._compute_speed(diff, 0.5, 0.2, 0.2)
+            self.get_logger().info(f'{self.get_name()} turning towards goal heading {heading} current {self._cur_theta} diff {diff} {twist.angular.z}')
+            self._publisher.publish(twist)
             self._cur_twist = twist
             return False
 
-        self.get_logger().info(f'at target')
+        # Apply calculated linear speed
+        twist.linear.x = desired_speed
         self._publisher.publish(twist)
-        return True
-
+        self.get_logger().info(f'{self.get_name()} a distance {dist} from target velocity {twist.linear.x}')
+        self._cur_twist = twist
+        return False
 
     def _do_state_at_start(self):
         self.get_logger().info(f'waiting in start state')

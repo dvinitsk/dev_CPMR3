@@ -94,7 +94,7 @@ class FSM(Node):
         speed = abs(diff) * gain
         speed = min(max_speed, max(min_speed, speed))
         return math.copysign(speed, diff)
-        
+    '''    
     def _drive_to_goal(self, goal_x, goal_y,
                        heading0_tol = 0.15,
                        range_tol = 0.15):
@@ -126,8 +126,51 @@ class FSM(Node):
 
         self.get_logger().info(f'at goal pose')
         self._publisher.publish(twist)
-        return True
+        return True'''
+        
+    def _drive_to_goal(self, goal_x, goal_y,
+        heading0_tol = 0.05,  # Reduced from 0.15 for better turning accuracy
+        range_tol = 0.1):     # Reduced from 0.15 for better positioning
+        """Return True iff we are at the goal, otherwise drive there"""
 
+        twist = Twist()
+        x_diff = goal_x - self._cur_x
+        y_diff = goal_y - self._cur_y
+        dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
+
+        # Log position error
+        self.get_logger().info(f'Position Error - X: {x_diff:.3f}, Y: {y_diff:.3f}, Distance: {dist:.3f}')
+
+        if dist > range_tol:
+            self.get_logger().info(f'{self.get_name()} driving to goal with goal distance {dist}')
+            # turn to the goal
+            heading = math.atan2(y_diff, x_diff)
+            diff = FSM._short_angle(heading - self._cur_theta)
+
+            # Log heading error
+            self.get_logger().info(f'Heading Error: {math.degrees(diff):.2f} degrees')
+
+            if (abs(diff) > heading0_tol):
+                # Increased angular gain and reduced max speed for more precise turning
+                twist.angular.z = FSM._compute_speed(diff, 0.08, 0.02, 0.7)
+                self.get_logger().info(f'{self.get_name()} turning towards goal heading {heading} current {self._cur_theta} diff {diff} {twist.angular.z}')
+                self._publisher.publish(twist)
+                self._cur_twist = twist
+                return False
+
+            # Adjusted linear movement for smoother acceleration and deceleration
+            distance_factor = min(1.0, dist / 2.0)  # Gradually slow down when approaching target
+            base_speed = FSM._compute_speed(dist, 0.4, 0.1, 0.3)
+            twist.linear.x = base_speed * distance_factor
+
+            self._publisher.publish(twist)
+            self.get_logger().info(f'{self.get_name()} a distance {dist} from target velocity {twist.linear.x}')
+            self._cur_twist = twist
+            return False
+
+        self.get_logger().info(f'at goal pose')
+        self._publisher.publish(twist)
+        return True
 
     def _do_state_at_start(self):
         self.get_logger().info(f'in start state')
