@@ -9,31 +9,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
 from std_srvs.srv import SetBool
-
-
-def euler_from_quaternion(quaternion):
-    """
-    Converts quaternion (w in last place) to euler roll, pitch, yaw
-    quaternion = [x, y, z, w]
-    """
-    x = quaternion.x
-    y = quaternion.y
-    z = quaternion.z
-    w = quaternion.w
-
-    sinr_cosp = 2 * (w * x + y * z)
-    cosr_cosp = 1 - 2 * (x * x + y * y)
-    roll = np.arctan2(sinr_cosp, cosr_cosp)
-
-    sinp = 2 * (w * y - z * x)
-    pitch = np.arcsin(sinp)
-
-    siny_cosp = 2 * (w * z + x * y)
-    cosy_cosp = 1 - 2 * (y * y + z * z)
-    yaw = np.arctan2(siny_cosp, cosy_cosp)
-
-    return roll, pitch, yaw
-
+from cpmr_ch11 import drive
 
 class FSM_STATES(Enum):
     AT_START = 'AT STart',
@@ -48,6 +24,14 @@ class FSM(Node):
 
         self.declare_parameter('chair_name', "chair_0")
         chair_name = self.get_parameter('chair_name').get_parameter_value().string_value
+        self.declare_parameter('heading0_tol', 0.05)
+        self.declare_parameter('range_tol', 0.05)
+        self.declare_parameter('theta_min', -np.pi / 2)
+        self.declare_parameter('theta_max', np.pi / 2)
+        self.declare_parameter('speed_min', 0.04)
+        self.declare_parameter('speed_max', 0.75)
+        self.declare_parameter('theta_gain', 1.0)
+        self.declare_parameter('speed_gain', 0.5)
 
         self.create_subscription(Odometry, f"/{chair_name}/odom", self._listener_callback, 1)
         self._publisher = self.create_publisher(Twist, f"/{chair_name}/cmd_vel", 1)
@@ -81,96 +65,16 @@ class FSM(Node):
             resp.message = "Architecture suspended"
         return resp
            
-
-    def _short_angle(angle):
-        if angle > math.pi:
-            angle = angle - 2 * math.pi
-        if angle < -math.pi:
-            angle = angle + 2 * math.pi
-        assert abs(angle) <= math.pi
-        return angle
-
-    def _compute_speed(diff, max_speed, min_speed, gain):
-        speed = abs(diff) * gain
-        speed = min(max_speed, max(min_speed, speed))
-        return math.copysign(speed, diff)
-    '''    
     def _drive_to_goal(self, goal_x, goal_y,
-                       heading0_tol = 0.15,
                        range_tol = 0.15):
-        """Return True iff we are at the goal, otherwise drive there"""
-
-        twist = Twist()
-
-
-        x_diff = goal_x - self._cur_x
-        y_diff = goal_y - self._cur_y
-        dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
-        if dist > range_tol:
-            self.get_logger().info(f'{self.get_name()} driving to goal with goal distance {dist}')
-            # turn to the goal
-            heading = math.atan2(y_diff, x_diff)
-            diff = FSM._short_angle(heading - self._cur_theta)
-            if (abs(diff) > heading0_tol):
-                twist.angular.z = FSM._compute_speed(diff, 0.1, 0.05, 0.5)
-                self.get_logger().info(f'{self.get_name()} turning towards goal heading {heading} current {self._cur_theta} diff {diff} {twist.angular.z}')
-                self._publisher.publish(twist)
-                self._cur_twist = twist
-                return False
-
-            twist.linear.x = FSM._compute_speed(dist, 0.5, 0.2, 0.2)
-            self._publisher.publish(twist)
-            self.get_logger().info(f'{self.get_name()} a distance {dist}  from target velocity {twist.linear.x}')
-            self._cur_twist = twist
-            return False
-
-        self.get_logger().info(f'at goal pose')
-        self._publisher.publish(twist)
-        return True'''
-        
-    def _drive_to_goal(self, goal_x, goal_y,
-        heading0_tol = 0.05,  # Reduced from 0.15 for better turning accuracy
-        range_tol = 0.1):     # Reduced from 0.15 for better positioning
-        """Return True iff we are at the goal, otherwise drive there"""
-
-        twist = Twist()
-        x_diff = goal_x - self._cur_x
-        y_diff = goal_y - self._cur_y
-        dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
-
-        # Log position error
-        self.get_logger().info(f'Position Error - X: {x_diff:.3f}, Y: {y_diff:.3f}, Distance: {dist:.3f}')
-
-        if dist > range_tol:
-            self.get_logger().info(f'{self.get_name()} driving to goal with goal distance {dist}')
-            # turn to the goal
-            heading = math.atan2(y_diff, x_diff)
-            diff = FSM._short_angle(heading - self._cur_theta)
-
-            # Log heading error
-            self.get_logger().info(f'Heading Error: {math.degrees(diff):.2f} degrees')
-
-            if (abs(diff) > heading0_tol):
-                # Increased angular gain and reduced max speed for more precise turning
-                twist.angular.z = FSM._compute_speed(diff, 0.08, 0.02, 0.7)
-                self.get_logger().info(f'{self.get_name()} turning towards goal heading {heading} current {self._cur_theta} diff {diff} {twist.angular.z}')
-                self._publisher.publish(twist)
-                self._cur_twist = twist
-                return False
-
-            # Adjusted linear movement for smoother acceleration and deceleration
-            distance_factor = min(1.0, dist / 2.0)  # Gradually slow down when approaching target
-            base_speed = FSM._compute_speed(dist, 0.4, 0.1, 0.3)
-            twist.linear.x = base_speed * distance_factor
-
-            self._publisher.publish(twist)
-            self.get_logger().info(f'{self.get_name()} a distance {dist} from target velocity {twist.linear.x}')
-            self._cur_twist = twist
-            return False
-
-        self.get_logger().info(f'at goal pose')
-        self._publisher.publish(twist)
-        return True
+        heading0_tol = self.get_parameter("heading0_tol").get_parameter_value().double_value
+        range_tol = self.get_parameter("range_tol").get_parameter_value().double_value
+        theta_range = (self.get_parameter("theta_min").get_parameter_value().double_value, self.get_parameter("theta_max").get_parameter_value().double_value)
+        speed_range = (self.get_parameter("speed_min").get_parameter_value().double_value, self.get_parameter("speed_max").get_parameter_value().double_value)
+        theta_gain = self.get_parameter("theta_gain").get_parameter_value().double_value
+        speed_gain = self.get_parameter("speed_gain").get_parameter_value().double_value
+        _, reached = drive.drive_to_goal(self._cur_x, self._cur_y, self._cur_theta, self._publisher, goal_x, goal_y, heading0_tol, range_tol,theta_range, speed_range, theta_gain, speed_gain)
+        return reached
 
     def _do_state_at_start(self):
         self.get_logger().info(f'in start state')
@@ -193,17 +97,17 @@ class FSM(Node):
         elif self._cur_state == FSM_STATES.PERFORMING_TASK:
             self._do_state_performing_task()
         else:
-            self.get_logger().info(f'bad state {state_cur_state}')
+            self.get_logger().info(f'bad state {self._cur_state}')
 
     def _listener_callback(self, msg):
         pose = msg.pose.pose
 
         d2 = (pose.position.x - self._last_x) * (pose.position.x - self._last_x) + (pose.position.y - self._last_y) * (pose.position.y - self._last_y)
 
-        roll, pitch, yaw = euler_from_quaternion(pose.orientation)
+        roll, pitch, yaw = drive.euler_from_quaternion(pose.orientation)
         self._cur_x = pose.position.x
         self._cur_y = pose.position.y
-        self._cur_theta = FSM._short_angle(yaw)
+        self._cur_theta = drive.short_angle(yaw)
         self._state_machine()
 
 
