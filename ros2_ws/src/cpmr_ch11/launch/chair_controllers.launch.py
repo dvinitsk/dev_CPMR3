@@ -23,17 +23,6 @@ def generate_launch_description():
     print(f"Controlling {nchairs}")
 
     nodelist = []
-    nodelist.append(
-        Node(
-            namespace = "chair_0",
-            package='cpmr_ch11',
-            executable='leader_chair',
-            name='leader_chair',
-            output='screen',
-            parameters=[{'chair_name' : "chair_0"}])
-        )
-    print(f"leaderchair done")
-
 
     for chair in range(1, nchairs):
         name = f'chair_{chair}'
