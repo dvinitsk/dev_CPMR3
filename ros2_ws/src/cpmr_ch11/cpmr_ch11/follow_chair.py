@@ -10,7 +10,32 @@ from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
 from std_srvs.srv import SetBool
 
-from cpmr_ch11 import drive
+
+
+
+def euler_from_quaternion(quaternion):
+    """
+    Converts quaternion (w in last place) to euler roll, pitch, yaw
+    quaternion = [x, y, z, w]
+    """
+    x = quaternion.x
+    y = quaternion.y
+    z = quaternion.z
+    w = quaternion.w
+
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+    sinp = 2 * (w * y - z * x)
+    pitch = np.arcsin(sinp)
+
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    return roll, pitch, yaw
+
 
 class FSM_STATES(Enum):
     STARTUP = 'Waiting', 
@@ -27,8 +52,6 @@ class FollowChair(Node):
 
         self.declare_parameter('chair_name', "chair_1")
         self._chair_name = self.get_parameter('chair_name').get_parameter_value().string_value
-        self.declare_parameter('theta_error', 0.05)
-        self.declare_parameter('dist_error', 0.01)
         self.declare_parameter('target_name', "chair_0")
         self._target_name = self.get_parameter('target_name').get_parameter_value().string_value
         self.get_logger().info(f'Chair {self._chair_name} is following {self._target_name}')
@@ -64,10 +87,62 @@ class FollowChair(Node):
                 resp.success = True
                 resp.message = "Architecture suspended"
         return resp
+           
 
-    def _drive_to_target(self, heading0_tol = 0.15, range_tol = 0.15):
-        _, reached = drive.drive_to_goal(self._cur_x, self._cur_y, self._cur_theta, self._publisher, self._target_x, self._target_y, heading0_tol, range_tol)
-        return reached
+    def _short_angle(angle):
+        if angle > math.pi:
+            angle = angle - 2 * math.pi
+        if angle < -math.pi:
+            angle = angle + 2 * math.pi
+        assert abs(angle) <= math.pi
+        return angle
+
+    def _compute_speed(diff, max_speed, min_speed, gain):
+        speed = abs(diff) * gain
+        speed = min(max_speed, max(min_speed, speed))
+        return math.copysign(speed, diff)
+    
+    def _drive_to_target(self, heading0_tol = 0.15, range_tol = 1.0, safe_distance = 1.0):
+        """Return True iff we are at the goal, otherwise drive there. Goal in position space only"""
+
+        twist = Twist()
+
+        x_diff = self._target_x - self._cur_x
+        y_diff = self._target_y - self._cur_y
+        dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
+
+        # Calculate desired speed based on distance to target
+        if dist < range_tol:
+            # Too close - stop
+            self.get_logger().info(f'at target')
+            self._publisher.publish(twist)
+            return True
+        elif dist < safe_distance:
+            # In safety zone - maintain distance
+            desired_speed = 0.1 * (dist - range_tol)
+        else:
+            # Normal following behavior
+            desired_speed = FollowChair._compute_speed(dist - safe_distance, 0.5, 0.05, 0.5)
+
+        # Handle orientation
+        heading = math.atan2(y_diff, x_diff)
+        self.get_logger().info(f'Heading to target is {heading} cur_angle is {self._cur_theta}')
+        diff = FollowChair._short_angle(heading - self._cur_theta)
+
+        if (abs(diff) > heading0_tol):
+            # Need to turn to face target
+            twist.angular.z = FollowChair._compute_speed(diff, 0.5, 0.2, 0.2)
+            self.get_logger().info(f'{self.get_name()} turning towards goal heading {heading} current {self._cur_theta} diff {diff} {twist.angular.z}')
+            self._publisher.publish(twist)
+            self._cur_twist = twist
+            return False
+
+        # Apply calculated linear speed
+        twist.linear.x = desired_speed
+        self._publisher.publish(twist)
+        self.get_logger().info(f'{self.get_name()} a distance {dist} from target velocity {twist.linear.x}')
+        self._cur_twist = twist
+        return False
 
     def _do_state_at_start(self):
         self.get_logger().info(f'waiting in start state')
@@ -88,7 +163,7 @@ class FollowChair(Node):
         elif self._cur_state == FSM_STATES.SLEEPING:
             pass
         else:
-            self.get_logger().info(f'Bad state {self._cur_state}')
+            self.get_logger().info(f'Bad state {state_cur_state}')
 
     def _target_callback(self, msg):
         """Update from target received"""
@@ -100,10 +175,10 @@ class FollowChair(Node):
         """We got a pose update"""
         pose = msg.pose.pose
 
-        roll, pitch, yaw = drive.euler_from_quaternion(pose.orientation)
+        roll, pitch, yaw = euler_from_quaternion(pose.orientation)
         self._cur_x = pose.position.x
         self._cur_y = pose.position.y
-        self._cur_theta = drive.short_angle(yaw)
+        self._cur_theta = FollowChair._short_angle(yaw)
         self._state_machine()
 
 
